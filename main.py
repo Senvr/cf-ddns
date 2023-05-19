@@ -5,15 +5,18 @@ import requests.packages.urllib3.util.connection as urllib3_cn
  
 auth_headers=None
 
-def get_ipv6_addr():
+def get_ip_addr(ipv:int=4):
+    assert ipv == 4 or ipv == 6
     old_gai_family = urllib3_cn.allowed_gai_family
-    def allowed_gai_family():
-        family = socket.AF_INET6    # force IPv6, idk how this works tbh
-        return family 
-    urllib3_cn.allowed_gai_family = allowed_gai_family
-    ip6=requests.get(f'https://ifconfig.co/ip').text.strip()
+    if ipv == 6:        
+        print("Monkeypatching urllib3")
+        def allowed_gai_family():
+            family = socket.AF_INET6 
+            return family 
+        urllib3_cn.allowed_gai_family = allowed_gai_family
+    ip_addr=requests.get(f'https://ifconfig.co/ip').text.strip()
     urllib3_cn.allowed_gai_family=old_gai_family
-    return ip6
+    return ip_addr
 
 def zoneid_from_name(zone_domain_name:str):
     global auth_headers
@@ -41,10 +44,10 @@ def update_record_by_id(zone_id:str, dns_record_id:str, dns_record_address:str, 
             return True
 
 if __name__ == "__main__":                
-    if not len(sys.argv)  == 5:
-        raise ValueError(f"Invalid arguments\nExpecting 5, got {len(sys.argv)}\nFormat: fqdn, name, type, token")
+    if not len(sys.argv)  == 6:
+        raise ValueError(f"Invalid arguments\nExpecting 6, got {len(sys.argv)}\nFormat: fqdn, name, type, token")
 
-    _, fqdn, zone_domain_name, record_type, cf_api_token = sys.argv      
+    _, fqdn, zone_domain_name, record_type, cf_api_token, ip_type = sys.argv      
             
     auth_headers={                
         'Authorization': f"Bearer {cf_api_token}",
@@ -59,9 +62,9 @@ if __name__ == "__main__":
     print(f"[{record_type}] - {fqdn} > {dns_record_address}")
     dns_record_id=dns_record_json['id']
     
-    self_ip6=get_ipv6_addr()
-    print(f"Machine IP is {self_ip6}")
+    self_ip=get_ip_addr()
+    print(f"Machine IP is {self_ip}, IPv{ip_type}")
     
-    if not dns_record_address == self_ip6:
-        update_record_by_id(zone_domain_name_id, dns_record_address, dns_record_address=self_ip6, fqdn=fqdn,dns_record_type=record_type)
+    if not dns_record_address == self_ip:
+        update_record_by_id(zone_domain_name_id, dns_record_address, self_ip, fqdn, record_type)
         print(f"UPDATED [{record_type}]@{fqdn} > {dns_record_address}")
