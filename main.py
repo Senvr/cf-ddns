@@ -43,12 +43,17 @@ def update_record_by_id(zone_id:str, dns_record_id:str, dns_record_address:str, 
                 raise RuntimeError(r.json()['result']['errors'])        
             return True
 
-if __name__ == "__main__":                
+if __name__ == "__main__":                        
     if not len(sys.argv)  == 6:
         raise ValueError(f"Invalid arguments\nExpecting 6, got {len(sys.argv)}\nFormat: fqdn, name, type, token")
-
-    _, fqdn, zone_domain_name, record_type, cf_api_token, ip_type = sys.argv      
+    _, fqdn, zone_domain_name, record_type, cf_api_token = sys.argv    
             
+    self_ip=get_ip_addr()
+    ip_type = 4
+    if record_type == "AAAA":
+        ip_type=6
+    print(f"Machine IP is {self_ip}, IPv{ip_type}")
+    
     auth_headers={                
         'Authorization': f"Bearer {cf_api_token}",
         "Content-Type": "application/json"
@@ -60,10 +65,7 @@ if __name__ == "__main__":
     dns_record_json=recordids_by_attributes(zone_domain_name_id, fqdn, record_type)[0]    
     dns_record_address=dns_record_json['content']
     print(f"[{record_type}] - {fqdn} > {dns_record_address}")
-    dns_record_id=dns_record_json['id']
-    
-    self_ip=get_ip_addr()
-    print(f"Machine IP is {self_ip}, IPv{ip_type}")
+    dns_record_id=dns_record_json['id']    
     
     if not dns_record_address == self_ip:
         update_record_by_id(zone_domain_name_id, dns_record_address, self_ip, fqdn, record_type)
