@@ -31,28 +31,24 @@ def recordids_by_attributes(zone_id:str, fqdn:str, record_type:str):
     return recordids_json['result']
          
 def update_record_by_id(zone_id:str, dns_record_id:str, dns_record_address:str, fqdn:str, dns_record_type:str, comment:str="cf-ddns", ttl:int=1):
+            global auth_headers
             payload={
                 "content": dns_record_address,
                 "name": fqdn,
                 "type": dns_record_type,
                 "comment": comment,
-                "ttl": ttl
-                }        
+                "ttl": int(ttl)
+                }                    
             r=requests.put(f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{dns_record_id}", data=json.dumps(payload), headers=auth_headers)
-            if not r.ok:            
-                raise RuntimeError(r.json()['result']['errors'])        
+            if not r.ok: 
+                print(zone_id, dns_record_id, fqdn)           
+                raise RuntimeError(r.text)        
             return True
 
 if __name__ == "__main__":                        
-    if not len(sys.argv)  == 6:
+    if not len(sys.argv)  == 5:
         raise ValueError(f"Invalid arguments\nExpecting 6, got {len(sys.argv)}\nFormat: fqdn, name, type, token")
-    _, fqdn, zone_domain_name, record_type, cf_api_token = sys.argv    
-            
-    self_ip=get_ip_addr()
-    ip_type = 4
-    if record_type == "AAAA":
-        ip_type=6
-    print(f"Machine IP is {self_ip}, IPv{ip_type}")
+    _, fqdn, zone_domain_name, record_type, cf_api_token = sys.argv                
     
     auth_headers={                
         'Authorization': f"Bearer {cf_api_token}",
@@ -66,7 +62,13 @@ if __name__ == "__main__":
     dns_record_address=dns_record_json['content']
     print(f"[{record_type}] - {fqdn} > {dns_record_address}")
     dns_record_id=dns_record_json['id']    
+        
+    ip_type = 4
+    if record_type == "AAAA":
+        ip_type=6
+    self_ip=get_ip_addr(ip_type)
+    print(f"Machine IP is {self_ip}, IPv{ip_type}")
     
     if not dns_record_address == self_ip:
-        update_record_by_id(zone_domain_name_id, dns_record_address, self_ip, fqdn, record_type)
+        update_record_by_id(zone_domain_name_id, dns_record_id, self_ip, fqdn, record_type)
         print(f"UPDATED [{record_type}]@{fqdn} > {dns_record_address}")
