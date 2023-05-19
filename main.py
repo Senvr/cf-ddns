@@ -2,6 +2,7 @@ import requests
 import socket, json, sys
 import requests.packages.urllib3.util.connection as urllib3_cn
  
+ 
 auth_headers=None
 
 def get_ipv6_addr():
