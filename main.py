@@ -73,8 +73,9 @@ def update_record_by_id(
 if __name__ == "__main__":
     if not len(sys.argv) == 5:
         raise ValueError(
-            f"Invalid arguments\nExpecting 6, got {len(sys.argv)}\nFormat: fqdn name type token"
+            f"Invalid arguments\nExpecting 4, got {len(sys.argv)-1}\nFormat: fqdn name type token"
         )
+        
     _, fqdn, zone_domain_name, record_type, cf_api_token = sys.argv
 
     auth_headers = {
@@ -101,3 +102,4 @@ if __name__ == "__main__":
             zone_domain_name_id, dns_record_id, self_ip, fqdn, record_type
         )
         print(f"UPDATED [{record_type}]@{fqdn} > {dns_record_address}")
+    print(f"No need to update")
