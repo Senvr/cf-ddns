@@ -34,6 +34,7 @@ def zoneid_from_name(zone_domain_name: str):
 
 def recordids_by_attributes(zone_id: str, fqdn: str, record_type: str):
     global auth_headers
+    print(zone_id, fqdn, record_type)
     r = requests.get(
         f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records?name={fqdn}&type={record_type}",
         headers=auth_headers,
@@ -41,6 +42,34 @@ def recordids_by_attributes(zone_id: str, fqdn: str, record_type: str):
     recordids_json = r.json()
     return recordids_json["result"]
 
+
+def create_dns_record(
+    zone_id: str,
+    dns_record_address: str,
+    fqdn: str,
+    dns_record_type: str,
+    comment: str = "cf-ddns",
+    proxied=True,
+    ttl: int = 1,
+):
+    global auth_headers
+    payload={
+        "content": dns_record_address,
+        "name": fqdn,
+        "proxied": proxied,
+        "type": dns_record_type,
+        "comment": comment,
+        "ttl": int(ttl),
+    }
+    r = requests.post(
+        f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
+        data=json.dumps(payload),
+        headers=auth_headers,
+    )
+    if not r.ok:
+        print(zone_id, dns_record_id, fqdn)
+        raise RuntimeError(r.text)
+    return True
 
 def update_record_by_id(
     zone_id: str,
@@ -50,6 +79,7 @@ def update_record_by_id(
     dns_record_type: str,
     comment: str = "cf-ddns",
     ttl: int = 1,
+
 ):
     global auth_headers
     payload = {
@@ -75,7 +105,6 @@ if __name__ == "__main__":
         raise ValueError(
             f"Invalid arguments\nExpecting 4, got {len(sys.argv)-1}\nFormat: fqdn name type token"
         )
-        
     _, fqdn, zone_domain_name, record_type, cf_api_token = sys.argv
 
     auth_headers = {
@@ -83,23 +112,27 @@ if __name__ == "__main__":
         "Content-Type": "application/json",
     }
 
-    zone_domain_name_id = zoneid_from_name(zone_domain_name)
-    print(f"Zone ID of {zone_domain_name} is {zone_domain_name_id}")
-
-    dns_record_json = recordids_by_attributes(zone_domain_name_id, fqdn, record_type)[0]
-    dns_record_address = dns_record_json["content"]
-    print(f"[{record_type}] - {fqdn} > {dns_record_address}")
-    dns_record_id = dns_record_json["id"]
-
     ip_type = 4
     if record_type == "AAAA":
         ip_type = 6
     self_ip = get_ip_addr(ip_type)
     print(f"Machine IP is {self_ip}, IPv{ip_type}")
+    zone_domain_name_id = zoneid_from_name(zone_domain_name)
+    dns_record_json = recordids_by_attributes(zone_domain_name_id, fqdn, record_type)
+    print(f"Zone ID of {zone_domain_name} is {zone_domain_name_id}")
+    if len(dns_record_json) > 0:
+        print("Record exists, checking if update is needed")
+        dns_record_address = dns_record_json[0]["content"]
+        print(f"[{record_type}] - {fqdn} > {dns_record_address}")
+        dns_record_id = dns_record_json[0]["id"]
 
-    if not dns_record_address == self_ip:
-        update_record_by_id(
-            zone_domain_name_id, dns_record_id, self_ip, fqdn, record_type
-        )
-        print(f"UPDATED [{record_type}]@{fqdn} > {dns_record_address}")
-    print(f"No need to update")
+        if not dns_record_address == self_ip:
+            update_record_by_id(
+                zone_domain_name_id, dns_record_id, self_ip, fqdn, record_type
+            )
+            print(f"UPDATED [{record_type}]@{fqdn} > {self_ip}")
+        else:
+            print("Did not update existing record for this host")
+    else:
+        create_dns_record(zone_domain_name_id, self_ip, fqdn, record_type)
+        print(f"CREATED [{record_type}]@{fqdn} > {self_ip}")
