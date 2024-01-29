@@ -1,25 +1,34 @@
-import requests
+import requests, time
 import socket, json, sys
 import requests.packages.urllib3.util.connection as urllib3_cn
-
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 auth_headers = None
 
 
 def get_ip_addr(ipv: int = 4):
     assert ipv == 4 or ipv == 6
+
     old_gai_family = urllib3_cn.allowed_gai_family
     if ipv == 6:
-        print("Monkeypatching urllib3")
-
+        print("Monkeypatching urllib3 for IPV6 only connection (please double check)")
         def allowed_gai_family():
             family = socket.AF_INET6
             return family
 
         urllib3_cn.allowed_gai_family = allowed_gai_family
-    ip_addr = requests.get(f"https://ifconfig.co/ip").text.strip()
+
+    try:
+        ip_addr = requests.get(f"https://ifconfig.co/ip",timeout=300).text
+    except requests.exceptions.ConnectionError:
+        session=requests.Session()
+        retry=Retry(connect=128,backoff_factor=1.0)
+        adapter=HTTPAdapter(max_retries=retry)
+        session.mount('https://', adapter)
+        ip_addr=session.get("https://ifconfig.co/ip").text
     urllib3_cn.allowed_gai_family = old_gai_family
-    return ip_addr
+    return ip_addr.strip()
 
 
 def zoneid_from_name(zone_domain_name: str):
@@ -34,7 +43,7 @@ def zoneid_from_name(zone_domain_name: str):
 
 def recordids_by_attributes(zone_id: str, fqdn: str, record_type: str):
     global auth_headers
-    print(zone_id, fqdn, record_type)
+#   print(zone_id, fqdn, record_type)
     r = requests.get(
         f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records?name={fqdn}&type={record_type}",
         headers=auth_headers,
@@ -48,8 +57,8 @@ def create_dns_record(
     dns_record_address: str,
     fqdn: str,
     dns_record_type: str,
-    comment: str = "cf-ddns",
-    proxied=True,
+    comment: str = f"cf-ddns created {time.time()}",
+    proxied:bool=True,
     ttl: int = 1,
 ):
     global auth_headers
@@ -61,13 +70,11 @@ def create_dns_record(
         "comment": comment,
         "ttl": int(ttl),
     }
-    r = requests.post(
-        f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
+    r = requests.post(        f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
         data=json.dumps(payload),
         headers=auth_headers,
     )
     if not r.ok:
-        print(zone_id, dns_record_id, fqdn)
         raise RuntimeError(r.text)
     return True
 
@@ -77,7 +84,7 @@ def update_record_by_id(
     dns_record_address: str,
     fqdn: str,
     dns_record_type: str,
-    comment: str = "cf-ddns",
+    comment: str = "cf-ddns updated {time.time()}",
     ttl: int = 1,
 
 ):
